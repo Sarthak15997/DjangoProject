@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse, Http404
 from .models import UserDetails
 from django.contrib import messages
 
@@ -45,3 +45,54 @@ def user_login(request):
 
 def confirmation(request):
     return render(request, 'Loginify/confirmation.html')
+
+def get_all_users(request):
+    users = UserDetails.objects.all()
+    user_list = [{"username": user.username, "email": user.email, "password": user.password} for user in users]
+    return JsonResponse(user_list, safe=False)
+
+def get_user_by_email(request, email):
+    try:
+        user = UserDetails.objects.get(email=email)
+        user_data = {"username":user.username, "email":user.email, "password":user.password}
+        return JsonResponse(user_data)
+    except UserDetails.DoesNotExist:
+        return JsonResponse({"error": "User Not Found"}, status = 404)
+
+def update_user(request, email):
+    try:
+        # Retrieve the user by email
+        user = UserDetails.objects.get(email=email)
+
+        if request.method == 'POST':
+            # Update the user fields if provided in the request
+            new_username = request.POST.get('username')
+            new_email = request.POST.get('email')
+            new_password = request.POST.get('password')
+
+            if new_email and new_email != user.email:
+                if UserDetails.objects.filter(email=new_email).exists():
+                    return JsonResponse({"error": "Email already exists"}, status=400)
+                user.email = new_email
+
+            if new_username:
+                user.username = new_username
+            if new_password:
+                user.password = new_password
+
+            # Save the updated user
+            user.save()
+
+            return JsonResponse({"message": "User updated successfully"})
+        else:
+            return JsonResponse({"error": "POST request required"}, status=400)
+    except UserDetails.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
+
+def delete_user(request, email):
+    try:
+        user = UserDetails.objects.get(email=email)
+        user.delete()
+        return JsonResponse({"message": "User deleted successfully"})
+    except UserDetails.DoesNotExist:
+        return JsonResponse({"error": "User not found"}, status=404)
